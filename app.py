@@ -1,6 +1,6 @@
 ﻿
 def get_message():
-    return "Version 1: Initial application"
+    return "Version 2: Automatic propagation works!"
 
 
 if __name__ == "__main__":
