@@ -1,1 +1,70 @@
 ﻿
+name: Propagate Main to All Branches
+
+"on":
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  propagate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge main into other branches
+        shell: bash
+        run: |
+          set -u
+          git fetch origin --prune
+          failed=0
+
+          while IFS= read -r remote_ref; do
+            branch="${remote_ref#origin/}"
+
+            if [[ "$branch" == "main" || "$branch" == "HEAD" ]]; then
+              continue
+            fi
+
+            echo "Processing branch: $branch"
+
+            if ! git switch --force-create "$branch" "$remote_ref"; then
+              echo "Checkout failed: $branch"
+              failed=1
+              continue
+            fi
+
+            if git merge --no-edit origin/main; then
+              if git push origin "HEAD:refs/heads/$branch"; then
+                echo "Updated $branch"
+              else
+                echo "Push failed: $branch"
+                failed=1
+              fi
+            else
+              echo "Merge conflict in $branch"
+              git merge --abort || true
+              failed=1
+            fi
+          done < <(
+            git for-each-ref \
+              --format='%(refname:short)' \
+              refs/remotes/origin
+          )
+
+          if [[ "$failed" -ne 0 ]]; then
+            echo "Some branches need attention."
+            exit 1
+          fi
